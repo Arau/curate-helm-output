@@ -1,0 +1,609 @@
+---
+# Source: storageos/templates/namespace.yaml
+kind: Namespace
+apiVersion: v1
+metadata:
+  name: storageos
+  labels:
+    name: storageos
+    app: storageos
+    chart: storageos-0.1.0
+    heritage: Tiller
+    release: v1
+
+---
+# Source: storageos/templates/secrets.yaml
+
+
+---
+
+# This secret is used to set the initial credentials of the node container.
+apiVersion: v1
+kind: Secret
+metadata:
+  name: init-secret
+  namespace: storageos
+  labels:
+    app: storageos
+    chart: storageos-0.1.0
+    heritage: Tiller
+    release: v1
+type: "kubernetes.io/storageos"
+data:
+  username: "c3RvcmFnZW9z"
+  password: "c3RvcmFnZW9z"
+
+---
+# Source: storageos/templates/setup_csi.yaml
+
+
+kind: StorageClass
+apiVersion: storage.k8s.io/v1
+metadata:
+  name: fast
+  labels:
+    app: storageos
+    chart: storageos-0.1.0
+    heritage: Tiller
+    release: v1
+provisioner: storageos
+parameters:
+  pool: default
+  # Value with space is an invalid label in CSI volumes.
+  # description: Kubernetes volume
+  fsType: ext4
+
+  # CSI credentials config.
+
+---
+
+# Role for Key Management.
+kind: ClusterRole
+apiVersion: rbac.authorization.k8s.io/v1
+metadata:
+  name: key-management-role
+  labels:
+    app: storageos
+    chart: storageos-0.1.0
+    heritage: Tiller
+    release: v1
+rules:
+  - apiGroups: [""]
+    resources: ["secrets"]
+    verbs: ["get", "list", "create", "delete"]
+
+---
+
+# Role for Driver Registrar.
+kind: ClusterRole
+apiVersion: rbac.authorization.k8s.io/v1
+metadata:
+  name: driver-registrar-role
+  labels:
+    app: storageos
+    chart: storageos-0.1.0
+    heritage: Tiller
+    release: v1
+rules:
+  - apiGroups: [""]
+    resources: ["nodes"]
+    verbs: ["get", "update"]
+  - apiGroups: [""]
+    resources: ["events"]
+    verbs: ["list", "watch", "create", "update", "patch"]
+
+---
+
+# Service account for StorageOS DaemonSet.
+kind: ServiceAccount
+apiVersion: v1
+metadata:
+  name: v1-storageos-daemonset-sa
+  namespace: storageos
+  labels:
+    app: storageos
+    chart: storageos-0.1.0
+    heritage: Tiller
+    release: v1
+
+---
+
+# Bind DaemonSet Service account to Driver Registrar role.
+kind: ClusterRoleBinding
+apiVersion: rbac.authorization.k8s.io/v1
+metadata:
+  name: driver-registrar-binding
+  labels:
+    app: storageos
+    chart: storageos-0.1.0
+    heritage: Tiller
+    release: v1
+subjects:
+  - kind: ServiceAccount
+    name: v1-storageos-daemonset-sa
+    namespace: storageos
+roleRef:
+  kind: ClusterRole
+  name: driver-registrar-role
+  apiGroup: rbac.authorization.k8s.io
+
+---
+
+# Bind DaemonSet Service account to Key Management role.
+kind: ClusterRoleBinding
+apiVersion: rbac.authorization.k8s.io/v1
+metadata:
+  name: key-management-binding
+  labels:
+    app: storageos
+    chart: storageos-0.1.0
+    heritage: Tiller
+    release: v1
+subjects:
+  - kind: ServiceAccount
+    name: v1-storageos-daemonset-sa
+    namespace: storageos
+roleRef:
+  kind: ClusterRole
+  name: key-management-role
+  apiGroup: rbac.authorization.k8s.io
+
+---
+
+# Role for CSI External Provisioner.
+kind: ClusterRole
+apiVersion: rbac.authorization.k8s.io/v1
+metadata:
+  name: csi-provisioner-role
+  labels:
+    app: storageos
+    chart: storageos-0.1.0
+    heritage: Tiller
+    release: v1
+rules:
+  - apiGroups: [""]
+    resources: ["persistentvolumes"]
+    verbs: ["list", "watch", "create", "delete"]
+  - apiGroups: [""]
+    resources: ["persistentvolumeclaims"]
+    verbs: ["get", "list", "watch", "update"]
+  - apiGroups: ["storage.k8s.io"]
+    resources: ["storageclasses"]
+    verbs: ["list", "watch", "get"]
+  - apiGroups: [""]
+    resources: ["secrets"]
+    verbs: ["get"]
+  - apiGroups: [""]
+    resources: ["events"]
+    verbs: ["list", "watch", "create", "update", "patch"]
+
+---
+
+# Role for CSI External Attacher.
+kind: ClusterRole
+apiVersion: rbac.authorization.k8s.io/v1
+metadata:
+  name: csi-attacher-role
+  labels:
+    app: storageos
+    chart: storageos-0.1.0
+    heritage: Tiller
+    release: v1
+rules:
+  - apiGroups: [""]
+    resources: ["persistentvolumes"]
+    verbs: ["get", "list", "watch", "update"]
+  - apiGroups: [""]
+    resources: ["nodes"]
+    verbs: ["get", "list", "watch"]
+  - apiGroups: ["storage.k8s.io"]
+    resources: ["storageclasses"]
+    verbs: ["list", "watch", "get"]
+  - apiGroups: ["storage.k8s.io"]
+    resources: ["volumeattachments"]
+    verbs: ["get", "list", "watch", "update"]
+  - apiGroups: [""]
+    resources: ["events"]
+    verbs: ["list", "watch", "create", "update", "patch"]
+
+---
+
+# Service Account for StorageOS StatefulSet.
+kind: ServiceAccount
+apiVersion: v1
+metadata:
+  name: v1-storageos-statefulset-sa
+  namespace: storageos
+  labels:
+    app: storageos
+    chart: storageos-0.1.0
+    heritage: Tiller
+    release: v1
+
+---
+
+# Bind StatefulSet service account to External Provisioner role.
+kind: ClusterRoleBinding
+apiVersion: rbac.authorization.k8s.io/v1
+metadata:
+  name: csi-provisioner-binding
+  labels:
+    app: storageos
+    chart: storageos-0.1.0
+    heritage: Tiller
+    release: v1
+subjects:
+  - kind: ServiceAccount
+    name: v1-storageos-statefulset-sa
+    namespace: storageos
+roleRef:
+  kind: ClusterRole
+  name: csi-provisioner-role
+  apiGroup: rbac.authorization.k8s.io
+
+---
+
+# Bind StatefulSet service account to External Attacher role.
+kind: ClusterRoleBinding
+apiVersion: rbac.authorization.k8s.io/v1
+metadata:
+  name: csi-attacher-binding
+  labels:
+    app: storageos
+    chart: storageos-0.1.0
+    heritage: Tiller
+    release: v1
+subjects:
+  - kind: ServiceAccount
+    name: v1-storageos-statefulset-sa
+    namespace: storageos
+roleRef:
+  kind: ClusterRole
+  name: csi-attacher-role
+  apiGroup: rbac.authorization.k8s.io
+
+---
+
+# Bind StatefulSet service account to Key Management role.
+kind: ClusterRoleBinding
+apiVersion: rbac.authorization.k8s.io/v1
+metadata:
+  name: sidecar-key-management-binding
+  labels:
+    app: storageos
+    chart: storageos-0.1.0
+    heritage: Tiller
+    release: v1
+subjects:
+  - kind: ServiceAccount
+    name: v1-storageos-statefulset-sa
+    namespace: storageos
+roleRef:
+  kind: ClusterRole
+  name: key-management-role
+  apiGroup: rbac.authorization.k8s.io
+
+---
+# Source: storageos/templates/tests/redis.yaml
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: v1-redis-test
+  annotations:
+    volume.beta.kubernetes.io/storage-class: fast
+spec:
+  accessModes:
+    - ReadWriteOnce
+  resources:
+    requests:
+      storage: 1Gi
+
+
+apiVersion: v1
+kind: Pod
+metadata:
+  name: v1-redis-test
+  annotations:
+    "helm.sh/hook": test-success
+spec:
+  containers:
+    - name: master
+      image: kubernetes/redis:v1
+      ports:
+        - containerPort: 6379
+      resources:
+        limits:
+          cpu: "0.1"
+      volumeMounts:
+        - mountPath: /redis-master-data
+          name: redis-data
+  volumes:
+    - name: redis-data
+      persistentVolumeClaim:
+        claimName: v1-redis-test
+
+---
+# Source: storageos/templates/svc.yaml
+apiVersion: v1
+kind: Service
+metadata:
+  name: storageos
+  namespace: storageos
+  labels:
+    app: storageos
+    chart: storageos-0.1.0
+    heritage: Tiller
+    release: v1
+spec:
+  type: ClusterIP
+  ports:
+    - port: 5705
+      targetPort: 5705
+      protocol: TCP
+      name: storageos
+  selector:
+    app: storageos
+    release: v1
+
+---
+# Source: storageos/templates/daemonset_csi.yaml
+
+
+kind: DaemonSet
+apiVersion: apps/v1
+metadata:
+  name: v1-storageos-daemon
+  namespace: storageos
+  labels:
+    app: storageos
+    chart: storageos-0.1.0
+    heritage: Tiller
+    release: v1
+spec:
+  selector:
+    matchLabels:
+      app: storageos
+  template:
+    metadata:
+      labels:
+        app: storageos
+        chart: storageos-0.1.0
+        heritage: Tiller
+        release: v1
+    spec:
+      serviceAccount: v1-storageos-daemonset-sa
+      hostPID: true
+      hostNetwork: true
+      initContainers:
+      - name: enable-lio
+        image: "storageos/init:0.1"
+        imagePullPolicy: IfNotPresent
+        volumeMounts:
+          - name: kernel-modules
+            mountPath: /lib/modules
+            readOnly: true
+          - name: sys
+            mountPath: /sys
+            mountPropagation: Bidirectional
+        securityContext:
+          privileged: true
+          capabilities:
+            add:
+            - SYS_ADMIN
+      containers:
+      - name: csi-driver-registrar
+        image: "quay.io/k8scsi/driver-registrar:v0.2.0"
+        imagePullPolicy: IfNotPresent
+        args:
+          - "--v=5"
+          - "--csi-address=$(ADDRESS)"
+        env:
+          - name: ADDRESS
+            value: /csi/csi.sock # plugin-dir is mounted at /csi
+            # value: unix://var/lib/kubelet/plugins/storageos/csi.sock
+          - name: KUBE_NODE_NAME
+            valueFrom:
+              fieldRef:
+                fieldPath: spec.nodeName
+        volumeMounts:
+          - name: plugin-dir
+            mountPath: /csi
+            # This is where kubelet.sock exists.
+          - name: registrar-socket-dir
+            mountPath: /var/lib/csi/sockets/
+      - name: storageos
+        image: "storageos/node:1.0.0-rc2"
+        imagePullPolicy: IfNotPresent
+        args:
+        - server
+        ports:
+        - containerPort: 5705
+          name: api
+        livenessProbe:
+          initialDelaySeconds: 65
+          timeoutSeconds: 10
+          failureThreshold: 5
+          httpGet:
+            path: /v1/health
+            port: api
+        readinessProbe:
+          initialDelaySeconds: 65
+          timeoutSeconds: 10
+          failureThreshold: 5
+          httpGet:
+            path: /v1/health
+            port: api
+        resources:
+            {}
+            
+
+        env:
+        - name: HOSTNAME
+          valueFrom:
+            fieldRef:
+              fieldPath: spec.nodeName
+        - name: ADMIN_USERNAME
+          valueFrom:
+            secretKeyRef:
+              name: init-secret
+              key: username
+        - name: ADMIN_PASSWORD
+          valueFrom:
+            secretKeyRef:
+              name: init-secret
+              key: password
+        - name: JOIN
+          value: 7b3ff8db-8209-4625-b3ff-72e4fac46df7
+        - name: ADVERTISE_IP
+          valueFrom:
+            fieldRef:
+              fieldPath: status.podIP
+        - name: NAMESPACE
+          value: storageos
+        - name: CSI_ENDPOINT
+          value: unix://var/lib/kubelet/plugins/storageos/csi.sock
+        # CSI credentials config.
+        securityContext:
+          privileged: true
+          capabilities:
+            add:
+            - SYS_ADMIN
+          allowPrivilegeEscalation: true
+        volumeMounts:
+          - name: kubelet-dir
+            mountPath: /var/lib/kubelet
+            mountPropagation: "Bidirectional"
+          - name: plugin-dir
+            mountPath: /var/lib/kubelet/plugins/storageos/
+          - name: device-dir
+            mountPath: /dev
+          - name: fuse
+            mountPath: /dev/fuse
+          - name: sys
+            mountPath: /sys
+          - name: state
+            mountPath: /var/lib/storageos
+            mountPropagation: "Bidirectional"
+      volumes:
+      - name: kernel-modules
+        hostPath:
+          path: /lib/modules
+      - name: registrar-socket-dir
+        hostPath:
+          path: /var/lib/kubelet/device-plugins/
+          type: DirectoryOrCreate
+      - name: kubelet-dir
+        hostPath:
+          path: /var/lib/kubelet
+          type: Directory
+      - name: plugin-dir
+        hostPath:
+          path: /var/lib/kubelet/plugins/storageos/
+          type: DirectoryOrCreate
+      - name: device-dir
+        hostPath:
+          path: /dev
+          type: Directory
+      - name: fuse
+        hostPath:
+          path: /dev/fuse
+      - name: sys
+        hostPath:
+          path: /sys
+      - name: state
+        hostPath:
+          path: /var/lib/storageos
+
+---
+# Source: storageos/templates/statefulset_csi.yaml
+
+
+kind: StatefulSet
+apiVersion: apps/v1beta1
+metadata:
+  name: v1-storageos-statefulset
+  namespace: storageos
+  labels:
+    app: storageos
+    chart: storageos-0.1.0
+    heritage: Tiller
+    release: v1
+spec:
+  serviceName: storageos
+  replicas: 1
+  selector:
+    matchLabels:
+      app: storageos
+  template:
+    metadata:
+      labels:
+        app: storageos
+        chart: storageos-0.1.0
+        heritage: Tiller
+        release: v1
+    spec:
+      serviceAccount: v1-storageos-statefulset-sa
+      containers:
+      - name: csi-external-provisioner
+        image: "quay.io/k8scsi/csi-provisioner:canary"
+        imagePullPolicy: Always
+        args:
+          - "--v=5"
+          - "--provisioner=storageos"
+          - "--csi-address=$(ADDRESS)"
+        env:
+          - name: ADDRESS
+            value: /csi/csi.sock # plugin-dir is mounted at /csi
+        volumeMounts:
+          - name: plugin-dir
+            mountPath: /csi
+      - name: csi-external-attacher
+        image: "quay.io/k8scsi/csi-attacher:canary"
+        imagePullPolicy: Always
+        args:
+          - "--v=5"
+          - "--csi-address=$(ADDRESS)"
+        env:
+          - name: ADDRESS
+            value: /csi/csi.sock
+        volumeMounts:
+         - name: plugin-dir
+            mountPath: /csi
+      volumes:
+        - name: plugin-dir
+          hostPath:
+            path: /var/lib/kubelet/plugins/storageos/
+            type: DirectoryOrCreate
+
+---
+# Source: storageos/templates/daemonset.yaml
+
+
+---
+# Source: storageos/templates/ingress.yaml
+
+
+---
+# Source: storageos/templates/podsecuritypolicy.yaml
+
+
+---
+# Source: storageos/templates/role.yaml
+
+
+---
+# Source: storageos/templates/rolebinding.yaml
+
+
+---
+# Source: storageos/templates/serviceaccount.yaml
+
+
+---
+# Source: storageos/templates/storageclass.yaml
+
+
+---
+# Source: storageos/templates/tls-secrets.yaml
+
+
